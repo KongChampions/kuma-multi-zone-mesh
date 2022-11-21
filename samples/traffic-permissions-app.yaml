@@ -1,0 +1,16 @@
+apiVersion: kuma.io/v1alpha1
+kind: TrafficPermission
+mesh: demo
+metadata: 
+  name: gateway-to-app
+spec: 
+  sources: 
+    - match: 
+        kuma.io/service: 'kong-1668609023-kong-proxy_kong_svc_80'
+  destinations: 
+    - match: 
+        kuma.io/service: 'demo-app_kuma-demo_svc_5000'
+  meshRoute: 
+    name: mesh-detail-view
+    params: 
+      mesh: demo

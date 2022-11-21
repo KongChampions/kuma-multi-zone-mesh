@@ -1,0 +1,16 @@
+apiVersion: kuma.io/v1alpha1
+kind: TrafficPermission
+mesh: demo
+metadata: 
+  name: allow-all-demo
+spec: 
+  sources: 
+    - match: 
+        kuma.io/service: '*'
+  destinations: 
+    - match: 
+        kuma.io/service: '*'
+  meshRoute: 
+    name: mesh-detail-view
+    params: 
+      mesh: demo

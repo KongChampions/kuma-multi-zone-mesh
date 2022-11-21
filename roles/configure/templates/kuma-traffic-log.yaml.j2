@@ -1,0 +1,13 @@
+---
+apiVersion: kuma.io/v1alpha1
+kind: TrafficLog
+metadata:
+  name: all-traffic
+mesh: "{{ kuma.mesh_name }}"
+spec:
+  sources:
+    - match:
+        kuma.io/service: '*'
+  destinations:
+    - match:
+        kuma.io/service: '*'

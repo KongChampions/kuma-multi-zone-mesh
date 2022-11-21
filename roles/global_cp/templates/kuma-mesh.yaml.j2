@@ -1,0 +1,43 @@
+apiVersion: kuma.io/v1alpha1
+kind: Mesh
+metadata:
+  name: "{{ kuma.mesh_name }}"
+spec:
+{% if kuma.options.mtls.enabled is defined and kuma.options.mtls.enabled | bool %}
+  mtls:
+    enabledBackend: ca
+    backends:
+      - name: ca
+        type: builtin
+        mode: {{ kuma.options.mtls.mode }}
+{% endif %}
+{% if kuma.options.metrics.enabled is defined and kuma.options.metrics.enabled | bool %}
+  metrics:
+    enabledBackend: prometheus
+    backends:
+    - name: prometheus
+      type: prometheus
+{% endif %}
+{% if kuma.options.tracing.enabled is defined and kuma.options.tracing.enabled | bool %}
+  tracing:
+    backends:
+      - conf:
+          url: 'https://{{ kuma.options.tracing.collector_address }}:443/api/v2/spans'
+        name: tempo-collector
+        sampling: 100
+        type: zipkin
+    defaultBackend: tempo-collector
+{% endif %}
+{% if kuma.options.logging.enabled is defined and kuma.options.logging.enabled | bool %}
+  logging:
+    defaultBackend: file
+    backends:
+      - name: file
+        type: file
+        conf:
+          path: /dev/stdout
+{% endif %}
+{% if kuma.options.localityawareloadbalancing.enabled is defined and kuma.options.localityawareloadbalancing.enabled | bool %}
+  routing:
+    localityAwareLoadBalancing: {{ kuma.options.localityawareloadbalancing.enabled }}
+{% endif %}

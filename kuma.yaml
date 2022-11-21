@@ -1,0 +1,120 @@
+---
+- name: Deploy Global Control-Plane
+  hosts: localhost
+  module_defaults:
+    kubernetes.core.k8s:
+      api_key: "{{ kuma.control_plane.global.cluster_api_key }}"
+      validate_certs: no
+      host: "{{ kuma.control_plane.global.cluster_api_url }}"
+    kubernetes.core.helm:
+      api_key: "{{ kuma.control_plane.global.cluster_api_key }}"
+      validate_certs: no
+      host: "{{ kuma.control_plane.global.cluster_api_url }}"
+  tasks:
+    - name: Import global_cp role
+      import_role:
+        name: global_cp
+  tags:
+    - never
+    - deploy
+    - deploy_global
+
+- name: Deploy Zone Control-Plane (Kubernetes)
+  hosts: localhost
+  module_defaults:
+    kubernetes.core.k8s:
+      api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+      validate_certs: no
+      host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+    kubernetes.core.helm:
+      api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+      validate_certs: no
+      host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+  tasks:
+    - name: Import zone_cp_k8s role
+      import_role:
+        name: zone_cp_k8s
+  tags:
+    - never
+    - deploy
+    - deploy_zone_cp
+    - deploy_zone_cp_k8s
+
+- name: Configure Logging & Metrics & Tracing
+  hosts: localhost
+  module_defaults:
+    kubernetes.core.k8s:
+      api_key: "{{ kuma.control_plane.global.cluster_api_key }}"
+      validate_certs: no
+      host: "{{ kuma.control_plane.global.cluster_api_url }}"
+    kubernetes.core.k8s_json_patch:
+      validate_certs: no
+  tasks:
+    - name: Import configure role
+      import_role:
+        name: configure
+  tags:
+    - never
+    - deploy
+    - configure
+
+#####
+# PURGE
+#####
+- name: Delete Global Control-Plane
+  hosts: localhost
+  module_defaults:
+    kubernetes.core.k8s:
+      api_key: "{{ kuma.control_plane.global.cluster_api_key }}"
+      validate_certs: no
+      host: "{{ kuma.control_plane.global.cluster_api_url }}"
+  tasks:
+    # Helm löscht nicht vollständig, daher wird anders gelöscht:
+    - shell: "kumactl install control-plane --cni-enabled --namespace {{ kuma.control_plane.global.namespace }} > /tmp/remove-kuma-global.yaml"
+    - kubernetes.core.k8s:
+        state: absent
+        src: "/tmp/remove-kuma-global.yaml"
+    - shell: "rm -f /tmp/remove-kuma-global.yaml"
+  tags:
+    - never
+    - purge
+    - purge_global
+
+- name: Delete Zone Control-Plane (Kubernetes)
+  hosts: localhost
+  module_defaults:
+    kubernetes.core.k8s:
+      api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+      validate_certs: no
+      host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+  tasks:
+    # Helm löscht nicht vollständig, daher wird anders gelöscht:
+    - shell: "kumactl install control-plane --cni-enabled --namespace {{ kuma.control_plane.zone.k8s.namespace }} > /tmp/remove-kuma-zone-k8s.yaml"
+    - kubernetes.core.k8s:
+        state: absent
+        src: "/tmp/remove-kuma-zone-k8s.yaml"
+    - shell: "rm -f /tmp/remove-kuma-zone-k8s.yaml"
+  tags:
+    - never
+    - purge
+    - purge_zone_cp
+    - purge_zone_cp_k8s
+
+- name: Disable Metrics
+  hosts: localhost
+  module_defaults:
+    kubernetes.core.k8s:
+      api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+      validate_certs: no
+      host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+  tasks:
+    - name: Remove metrics namespace
+      kubernetes.core.k8s:
+        name: "{{ kuma.options.metrics.namespace }}"
+        api_version: v1
+        kind: Namespace
+        state: absent
+  tags:
+    - never
+    - purge
+    - purge_metrics

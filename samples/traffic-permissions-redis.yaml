@@ -1,0 +1,33 @@
+apiVersion: kuma.io/v1alpha1
+kind: TrafficPermission
+mesh: demo
+metadata: 
+  name: app-to-redis
+spec: 
+  sources: 
+    - match: 
+        kuma.io/service: 'demo-app_kuma-demo_svc_5000'
+  destinations: 
+    - match: 
+        kuma.io/service: 'redis_kuma-demo_svc_6379'
+  meshRoute: 
+    name: mesh-detail-view
+    params: 
+      mesh: demo
+---
+apiVersion: kuma.io/v1alpha1
+kind: TrafficPermission
+mesh: demo
+metadata: 
+  name: app-to-redisv2
+spec: 
+  sources: 
+    - match: 
+        kuma.io/service: 'demo-app_kuma-demo_svc_5000'
+  destinations: 
+    - match: 
+        kuma.io/service: 'redis-v2_kuma-demo_svc_6379'
+  meshRoute: 
+    name: mesh-detail-view
+    params: 
+      mesh: demo

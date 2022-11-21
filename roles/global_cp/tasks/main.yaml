@@ -1,0 +1,65 @@
+---
+- name: ONLINE MODE | Deploy latest version of Kumas openshift control plane
+  kubernetes.core.helm:
+    name: kuma
+    chart_ref: kuma
+    namespace: "{{ kuma.control_plane.global.namespace }}"
+    create_namespace: true
+    values: "{{ lookup('template', 'values.yaml.j2') | from_yaml }}"
+    chart_version: "{{ kuma.helm_chart_version }}"
+    chart_repo_url: "https://kumahq.github.io/charts"
+  when: not offline_mode | bool
+
+- name: OFFLINE MODE | Deploy latest version of Kumas openshift control plane
+  kubernetes.core.helm:
+    name: kuma
+    chart_ref: kuma
+    namespace: "{{ kuma.control_plane.global.namespace }}"
+    create_namespace: true
+    values: "{{ lookup('template', 'values.yaml.j2') | from_yaml }}"
+    chart_version: "{{ kuma.helm_chart_version }}"
+    chart_repo_url: "https://{{ image_repo_url }}:443/artifactory/api/helm/helm-virtual/"
+  when: offline_mode | bool
+
+- name: Wait 20 Seconds to register kuma-admission webhooks internally
+  pause:
+    seconds: 20
+
+- name: Create Mesh
+  kubernetes.core.k8s:
+    state: present
+    template: 'kuma-mesh.yaml.j2'
+
+- name: Create Route to sync Global CP with Zone CP
+  kubernetes.core.k8s:
+    state: present
+    template: 'oc-route-global-zone-sync.yaml.j2'
+  when: openshift_mode | bool
+
+- block:
+    - name: Remove predefined Timeout-CRD
+      kubernetes.core.k8s:
+        state: absent
+        definition:
+          apiVersion: kuma.io/v1alpha1
+          kind: Timeout
+          mesh: "{{ kuma.mesh_name }}"
+          metadata:
+            name: "timeout-all-{{ item }}"
+      loop:
+        - default
+        - "{{ kuma.mesh_name }}"
+
+    - name: Remove predefined TrafficPermission-CRD
+      kubernetes.core.k8s:
+        state: absent
+        definition:
+          apiVersion: kuma.io/v1alpha1
+          kind: TrafficPermission
+          mesh: "{{ kuma.mesh_name }}"
+          metadata:
+            name: "allow-all-{{ item }}"
+      loop:
+        - default
+        - "{{ kuma.mesh_name }}"
+  when: extra_secure_mode | bool

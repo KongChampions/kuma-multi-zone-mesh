@@ -1,0 +1,46 @@
+---
+- name: Block - OPENSHIFT MODE
+  block:
+    - name: Disable management of DNS operator
+      kubernetes.core.k8s:
+        api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+        host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+        state: present
+        src: "oc-dns-operator.yaml"
+
+    - name: Change K8s DNS config
+      kubernetes.core.k8s:
+        api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+        host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+        state: present
+        src: "oc-dns-config.yaml"
+  when: openshift_mode | bool
+
+- name: ONLINE MODE | Deploy latest version of Kumas openshift control plane
+  kubernetes.core.helm:
+    name: kuma
+    chart_ref: kuma
+    namespace: "{{ kuma.control_plane.zone.k8s.namespace }}"
+    create_namespace: true
+    values: "{{ lookup('template', 'values.yaml.j2') | from_yaml }}"
+    chart_version: "{{ kuma.helm_chart_version }}"
+    chart_repo_url: "https://kumahq.github.io/charts"
+  register: helm_output
+  when: not offline_mode | bool
+
+- name: OFFLINE MODE | Deploy latest version of Kumas openshift control plane
+  kubernetes.core.helm:
+    name: kuma
+    chart_ref: kuma
+    namespace: "{{ kuma.control_plane.zone.k8s.namespace }}"
+    create_namespace: true
+    values: "{{ lookup('template', 'values.yaml.j2') | from_yaml }}"
+    chart_version: "{{ kuma.helm_chart_version }}"
+    chart_repo_url: "https://{{ image_repo_url }}:443/artifactory/api/helm/helm-virtual/"
+  register: helm_output
+  when: offline_mode | bool
+
+# - name: DEBUG | Write templates to file
+#   copy:
+#     dest: helm-out.yaml
+#     content: "{{ helm_output.stdout }}"

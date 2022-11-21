@@ -1,0 +1,33 @@
+image:
+  repository: kong/kong-gateway
+  tag: "3.0"
+
+enterprise:
+  enabled: false
+  #license_secret: kong-enterprise-license
+  #vitals:
+  #  enabled: false
+  #portal:
+  #  enabled: false
+  #rbac:
+  #  enabled: false
+
+manager:
+  enabled: false
+
+portal:
+  enabled: false
+
+portalapi:
+  enabled: false
+
+env:
+  database: "off"
+
+ingressController:
+  enabled: true
+
+proxy:
+  # Enable creating a Kubernetes service for the proxy
+  enabled: true
+  type: LoadBalancer

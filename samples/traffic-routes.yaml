@@ -1,0 +1,63 @@
+# ---
+# # Zone Cluster
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: redis-v2
+#   namespace: kuma-demo
+# spec:
+#   selector:
+#     app: redis-v2
+#   ports:
+#   - protocol: TCP
+#     port: 6379
+# ---
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: redis-v2
+#   namespace: kuma-demo
+# spec:
+#   selector:
+#     matchLabels:
+#       app: redis-v2
+#   replicas: 1
+#   template:
+#     metadata:
+#       labels:
+#         app: redis-v2
+#     spec:
+#       containers:
+#         - name: redis-v2
+#           image: "redis"
+#           ports:
+#             - name: tcp
+#               containerPort: 6379
+#           lifecycle:
+#             preStop: # delay shutdown to support graceful mesh leave
+#               exec:
+#                 command: ["/bin/sleep", "30"]
+#             postStart:
+#               exec:
+#                 command: ["/usr/local/bin/redis-cli", "set", "zone", "aks-v2"]
+---
+apiVersion: kuma.io/v1alpha1
+kind: TrafficRoute
+mesh: demo
+metadata:
+  name: split-traffic
+spec:
+  sources:
+    - match:
+        kuma.io/service: demo-app_kuma-demo_svc_5000
+  destinations:
+    - match:
+        kuma.io/service: redis_kuma-demo_svc_6379
+  conf:
+    split:
+      - weight: 90
+        destination:
+          kuma.io/service: redis_kuma-demo_svc_6379
+      - weight: 10
+        destination:
+          kuma.io/service: redis-v2_kuma-demo_svc_6379

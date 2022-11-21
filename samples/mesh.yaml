@@ -1,0 +1,37 @@
+apiVersion: kuma.io/v1alpha1
+kind: Mesh
+metadata:
+  name: demo
+spec:
+  mtls:
+    enabledBackend: ca
+    backends:
+      - name: ca
+        type: builtin
+  tracing:
+    defaultBackend: jaeger-collector
+    backends:
+      - name: jaeger-collector
+        sampling: 100
+        type: zipkin
+        conf:
+          url: 'http://jaeger-collector.mesh-observability:9411/api/v2/spans'
+  logging:
+    defaultBackend: file
+    backends:
+      - name: file
+        type: file
+        conf:
+          path: /dev/stdout
+  metrics:
+    enabledBackend: prometheus
+    backends:
+      - name: prometheus
+        type: prometheus
+        conf:
+          path: /metrics
+          port: 5670
+          tags:
+            kuma.io/service: dataplane-metrics
+  routing:
+    localityAwareLoadBalancing: true

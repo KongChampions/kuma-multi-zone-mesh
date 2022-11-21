@@ -1,0 +1,5 @@
+[zone_cp_vm]
+kuma-zone-cp.example.com
+
+[zone_dp_vms]
+kuma-test.example.com

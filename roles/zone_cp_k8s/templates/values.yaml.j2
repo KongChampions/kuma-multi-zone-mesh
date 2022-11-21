@@ -1,0 +1,185 @@
+global:
+  imagePullSecrets: [ ]
+  image:
+{% if offline_mode | bool %}
+    registry: "{{ image_repo_url }}:{{ image_repo_port }}/kumahq"
+{% else %}
+    registry: "docker.io/kumahq"
+{% endif %}
+    tag:
+
+patchSystemNamespace: true
+installCrdsOnUpgrade:
+  enabled: true
+  imagePullSecrets: [ ]
+
+experimental:
+  gateway: false
+
+controlPlane:
+  logLevel: "{{ kuma.loglevel }}"
+  mode: "zone"
+  zone: "{{ kuma.control_plane.zone.k8s.name }}"
+  kdsGlobalAddress: "grpcs://{{ kuma.control_plane.global.grpcs_address }}"
+  replicas: 1
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 2
+    targetCPUUtilizationPercentage: 80
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 80
+  nodeSelector:
+    kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+  affinity: {}
+  injectorFailurePolicy: Fail
+  service:
+    name:
+    type: "{{ kuma.control_plane.zone.k8s.service_type }}"
+{% if kuma.control_plane.zone.k8s.service_annotations is defined  %}
+    annotations:
+      {{ kuma.control_plane.zone.k8s.service_annotations | to_yaml | replace('{', '') | replace('}', '') }}
+{% else %}
+    annotations: { }
+{% endif %}
+  globalZoneSyncService:
+    type: "{{ kuma.control_plane.global.sync_service_type }}"
+    loadBalancerIP:
+{% if kuma.control_plane.global.sync_service__annotations is defined  %}
+    annotations:
+      {{ kuma.control_plane.global.sync_service__annotations | to_yaml | replace('{', '') | replace('}', '') }}
+{% else %}
+    annotations: { }
+{% endif %}
+    port: 5685
+  defaults:
+    skipMeshCreation: true
+  # resources:
+  #   requests:
+  #     cpu: 100m
+  #     memory: 256Mi
+  tls:
+    general:
+      secretName: ""
+      caBundle: ""
+    apiServer:
+      secretName: ""
+      clientCertsSecretName: ""
+    kdsGlobalServer:
+      secretName: ""
+    kdsZoneClient:
+      secretName: ""
+  image:
+    pullPolicy: IfNotPresent
+    repository: "kuma-cp"
+    # tag: dev-8e141ed0-1
+  secrets:
+  envVars:
+    KUMA_RUNTIME_KUBERNETES_INJECTOR_SIDECAR_CONTAINER_REDIRECT_PORT_INBOUND_V6: '0'
+    KUMA_RUNTIME_KUBERNETES_INJECTOR_SIDECAR_CONTAINER_REDIRECT_PORT_OUTBOUND_V6: '0'
+
+  webhooks:
+    validator:
+      additionalRules: ""
+    ownerReference:
+      additionalRules: ""
+
+cni:
+  enabled: "{{ kuma.control_plane.zone.k8s.cni_mode }}"
+  chained: false
+  netDir: /etc/cni/multus/net.d
+  binDir: /var/lib/cni/bin
+  confName: kuma-cni.conf
+  logLevel: "{{ kuma.loglevel }}"
+  nodeSelector:
+    kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+  image:
+{% if offline_mode | bool %}
+    registry: "{{ image_repo_url }}:{{ image_repo_port }}"
+{% else %}
+    registry: "docker.io"
+{% endif %}
+    repository: "kumahq/install-cni"  # Original: bitnami/lobkovilya...
+    tag: "0.0.10"
+
+dataPlane:
+  image:
+    repository: "kuma-dp"
+    # tag: dev-8e141ed0-5
+    pullPolicy: IfNotPresent
+  initImage:
+    repository: "kuma-init"
+
+ingress:
+  enabled: "{{ kuma.control_plane.zone.k8s.ingress.enabled | bool }}"
+  drainTime: 30s
+  replicas: 1
+  service:
+    type: "{{ kuma.control_plane.zone.k8s.ingress.service_type }}"
+{% if kuma.control_plane.zone.k8s.ingress.service_annotations is defined  %}
+    annotations:
+      {{ kuma.control_plane.zone.k8s.ingress.service_annotations | to_yaml | replace('{', '') | replace('}', '') }}
+{% else %}
+    annotations: { }
+{% endif %}
+    port: 10001
+{% if openshift_mode | bool %}
+    nodePort: "{{ kuma.control_plane.zone.k8s.ingress.exposed_nodeport }}"
+{% else %}
+{% endif %}
+  annotations: { }
+  nodeSelector:
+    kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+  affinity: {}
+
+egress:
+  enabled: false
+  drainTime: 30s
+  replicas: 1
+  service:
+    type: ClusterIP
+    loadBalancerIP:
+    annotations: { }
+    port: 10002
+    nodePort:
+  annotations: { }
+  nodeSelector:
+    kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+  affinity: {}
+
+kubectl:
+  image:
+{% if offline_mode | bool %}
+    registry: "{{ image_repo_url }}:{{ image_repo_port }}"
+{% else %}
+    registry: "docker.io"
+{% endif %}
+    repository: kumahq/kubectl
+    tag: "v1.20.15"
+
+kumactl:
+  image:
+{% if offline_mode | bool %}
+    registry: "{{ image_repo_url }}:{{ image_repo_port }}"
+{% else %}
+    registry: "docker.io"
+{% endif %}
+    repository: kumahq/kumactl
+
+hooks:
+  nodeSelector:
+    kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+
+
+
+

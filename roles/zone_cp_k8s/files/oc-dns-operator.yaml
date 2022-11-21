@@ -1,0 +1,8 @@
+apiVersion: operator.openshift.io/v1
+kind: DNS
+metadata:
+  finalizers:
+    - dns.operator.openshift.io/dns-controller
+  name: default
+spec:
+  managementState: Unmanaged

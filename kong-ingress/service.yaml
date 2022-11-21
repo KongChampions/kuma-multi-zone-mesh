@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kuma-demo-app
+  namespace: kuma-demo
+spec:
+  type: ExternalName
+  externalName: demo-app.kuma-demo.svc.5000.mesh
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kuma-demo-app-ingress
+  namespace: kuma-demo
+  annotations:
+    kubernetes.io/ingress.class: kong
+    konghq.com/strip-path: "true"
+spec:
+  rules:
+  - host: kuma-demo.144-24-161-77.nip.io
+    http:
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: kuma-demo-app
+              port: 
+                number: 80

@@ -1,0 +1,152 @@
+# TRACING
+- name: Create Trace CRD for Kuma
+  kubernetes.core.k8s:
+    state: present
+    template: 'kuma-traffic-trace.yaml.j2'
+  when:
+    - kuma.options.tracing.enabled is defined
+    - kuma.options.tracing.enabled | bool
+
+
+# LOGGING
+- name: Create Log CRD for Kuma
+  kubernetes.core.k8s:
+    state: present
+    template: 'kuma-traffic-log.yaml.j2'
+  when:
+    - kuma.options.logging.enabled is defined
+    - kuma.options.logging.enabled | bool
+
+
+# METRICS
+- name: Add Metrics
+  block:
+    - name: Write kuma-metrics.yaml to file
+      shell: kumactl install metrics --mesh {{ kuma.mesh_name }} --namespace {{ kuma.options.metrics.namespace }} --kuma-cp-address http://kuma-control-plane.{{ kuma.control_plane.zone.k8s.namespace }}.svc.cluster.local:5676 --without-grafana > /tmp/kuma-metrics.yaml
+
+    - name: replace image name for airgapped environment
+      ansible.builtin.replace:
+        path: /tmp/kuma-metrics.yaml
+        regexp: '^(.*)image: "(.*)'
+        replace: '\1image: "{{ image_repo_url }}:{{ image_repo_port }}/\2'
+
+    - name: Raise metrics volume size for prometheus
+      ansible.builtin.replace:
+        path: /tmp/kuma-metrics.yaml
+        regexp: '^(.*)storage: "8Gi"'
+        replace: '\1storage: "1024Gi"'
+
+    - name: Install kuma metrics on k8s
+      kubernetes.core.k8s:
+        api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+        host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+        state: present
+        src: '/tmp/kuma-metrics.yaml'
+
+    - name: Remove kuma-metrics.yaml file from /tmp
+      ansible.builtin.file:
+        path: '/tmp/kuma-metrics.yaml'
+        state: absent
+
+    - name: Patch Deployment
+      kubernetes.core.k8s_json_patch:
+        api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+        host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+        kind: Deployment
+        namespace: "{{ kuma.options.metrics.namespace }}"
+        name: prometheus-server
+        patch:
+          # Scale down to prevent failure container creating and 2/1 pods state
+          - op: replace
+            path: /spec/replicas
+            value: 0
+          - op: add
+            path: /spec/template/metadata/annotations/kuma.io~1gateway
+            value: enabled
+          - op: replace
+            path: /spec/template/spec/containers/1/args/0
+            value: "--storage.tsdb.retention.time=7d"
+          - op: remove
+            path: /spec/template/spec/volumes/1/persistentVolumeClaim
+          - op: add
+            path: /spec/template/spec/volumes/1/emptyDir
+            value: {}
+
+    - name: Remove PersistentVolumeClaim
+      kubernetes.core.k8s:
+        api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+        host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+        state: absent
+        kind: PersistentVolumeClaim
+        namespace: "{{ kuma.options.metrics.namespace }}"
+        name: prometheus-server
+
+    - name: Patch Node-exporter with new port to prevent conflicts with existing prometheus server
+      kubernetes.core.k8s_json_patch:
+        api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+        host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+        kind: Service
+        namespace: "{{ kuma.options.metrics.namespace }}"
+        name: prometheus-node-exporter
+        patch:
+          - op: replace
+            path: /spec/ports/0/port
+            value: 9109
+          - op: replace
+            path: /spec/ports/0/targetPort
+            value: 9109
+
+    - name: Patch Daemon set with new port
+      kubernetes.core.k8s_json_patch:
+        api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+        host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+        kind: DaemonSet
+        namespace: "{{ kuma.options.metrics.namespace }}"
+        name: prometheus-node-exporter
+        patch:
+          - op: add
+            path: /spec/template/spec/containers/0/args/0
+            value: "--web.listen-address=:9109"
+          - op: replace
+            path: /spec/template/spec/containers/0/ports/0/containerPort
+            value: 9109
+          - op: replace
+            path: /spec/template/spec/containers/0/ports/0/hostPort
+            value: 9109
+
+    - name: "Add SecurityContextConstaint for {{ kuma.options.metrics.namespace }}"
+      kubernetes.core.k8s:
+        api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+        host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+        definition: "{{ lookup('template', 'oc-scc-metrics.yaml.j2') }}"
+
+    - name: Replace prometheus.yml configmap
+      kubernetes.core.k8s:
+        api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+        host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+        state: present
+        template: 'templates/kuma-metrics-cm-prometheus.yml.j2'
+
+    - name: Create Openshift-Route to access prometheus UI
+      kubernetes.core.k8s:
+        api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+        host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+        state: present
+        template: 'oc-route-metrics.yaml.j2'
+
+    - name: Patch Deployment replicas (scale up)
+      kubernetes.core.k8s_json_patch:
+        api_key: "{{ kuma.control_plane.zone.k8s.cluster_api_key }}"
+        host: "{{ kuma.control_plane.zone.k8s.cluster_api_url }}"
+        kind: Deployment
+        namespace: "{{ kuma.options.metrics.namespace }}"
+        name: prometheus-server
+        patch:
+          # Scale up again
+          - op: replace
+            path: /spec/replicas
+            value: 1
+
+  when:
+    - kuma.options.metrics.enabled is defined
+    - kuma.options.metrics.enabled | bool

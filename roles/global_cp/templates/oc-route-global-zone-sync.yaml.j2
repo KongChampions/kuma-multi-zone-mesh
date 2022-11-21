@@ -1,0 +1,21 @@
+---
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: "{{ kuma.control_plane.global.grpcs_address }}"
+  namespace: "{{ kuma.control_plane.global.namespace }}"
+  labels:
+    app.kubernetes.io/instance: kuma
+    app.kubernetes.io/name: kuma
+    app.kubernetes.io/version: "{{ kuma.version }}"
+spec:
+  host: "{{ kuma.control_plane.global.grpcs_address }}"
+  to:
+    kind: Service
+    name: kuma-global-zone-sync
+  port:
+    targetPort: global-zone-sync
+  tls:
+    termination: passthrough
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
